@@ -1,5 +1,7 @@
 # device-gateway
 
+[![CI](https://github.com/saadbutt/device-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/saadbutt/device-gateway/actions/workflows/ci.yml)
+
 A TCP ingest gateway for GPS and telemetry devices, written in Go with no third-party dependencies.
 
 It is the part of a telematics platform that sits between hardware in the field and everything else: it accepts device connections, decodes a binary frame format, acknowledges every record, suppresses replays from devices that reconnect, and applies backpressure when the downstream cannot keep up.
