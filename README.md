@@ -8,6 +8,34 @@ It is the part of a telematics platform that sits between hardware in the field 
 
 I built it because the interesting problems in device ingest are not in the happy path. They are in what happens when 5,000 trackers behind carrier NAT all lose their uplink at once and reconnect within the same ten seconds.
 
+## Tech stack
+
+- **Language:** Go, standard library only — no third-party dependencies
+- **Protocol:** a hand-rolled binary frame format over raw TCP, CRC-16/CCITT
+- **Metrics:** Prometheus text exposition, hand-rolled (no client library)
+- **CI:** GitHub Actions — gofmt, vet, full suite, race detector, arm64
+  cross-compile
+
+## Architecture
+
+```mermaid
+flowchart TD
+    Dev["Device fleet\n(TCP)"] --> Accept["Accept loop\n(token-bucket rate limit)"]
+    Accept --> Decode["Frame decoder\nresync, CRC-16, partial reads"]
+    Decode --> Dedup["Pipeline:\nsliding-window dedup\n(per-device bitmap)"]
+    Dedup --> Queue["Bounded queue\nblock / drop_oldest / drop_newest"]
+    Queue --> Workers["Worker pool"]
+    Workers --> Handler["Handler\n(log + count here;\nPostgres/Kafka in a real deployment)"]
+    Workers --> Metrics["/metrics, /healthz\n(Prometheus text)"]
+
+    Decode -.->|ack per sequence| Dev
+```
+
+The handler is one function — logging and counting here, but it's the
+extension point the [Layout](#layout) section below names as the intended
+place to add TimescaleDB or Kafka. Everything left of it (decode, dedup,
+backpressure) is what this repo is actually about.
+
 ## The problems it actually solves
 
 **Frames do not arrive whole.** TCP is a byte stream. A reader that assumes one `Read` returns one frame works perfectly on localhost and fails in production. The decoder handles partial reads, resynchronises after a device that lost power mid-write, and rejects a length field that would otherwise let a malformed device allocate 64 KB per frame.
